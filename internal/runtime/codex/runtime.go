@@ -38,16 +38,7 @@ func (r *Runtime) Detect(ctx context.Context) (cula.RuntimeInfo, error) {
 	}
 	home, _ := os.UserHomeDir()
 	if data, err := os.ReadFile(filepath.Join(home, ".codex", "auth.json")); err == nil {
-		var auth struct {
-			Tokens struct {
-				AccessToken string `json:"access_token"`
-			} `json:"tokens"`
-		}
-		if json.Unmarshal(data, &auth) == nil && auth.Tokens.AccessToken != "" {
-			info.AuthStatus = cula.AuthLoggedIn
-		} else {
-			info.AuthStatus = cula.AuthLoggedOut
-		}
+		info.AuthStatus = authStatusFromFile(data)
 	} else {
 		info.AuthStatus = cula.AuthLoggedOut
 	}
@@ -65,6 +56,23 @@ func (r *Runtime) Detect(ctx context.Context) (cula.RuntimeInfo, error) {
 		}
 	}
 	return info, nil
+}
+
+// authStatusFromFile reports whether a codex auth.json represents a logged-in
+// session. Codex stores either OAuth tokens (ChatGPT sign-in) under "tokens"
+// or an API key under "OPENAI_API_KEY" when auth_mode is "apikey"; either one
+// means the user is authenticated.
+func authStatusFromFile(data []byte) cula.AuthStatus {
+	var auth struct {
+		Tokens struct {
+			AccessToken string `json:"access_token"`
+		} `json:"tokens"`
+		APIKey string `json:"OPENAI_API_KEY"`
+	}
+	if json.Unmarshal(data, &auth) == nil && (auth.Tokens.AccessToken != "" || auth.APIKey != "") {
+		return cula.AuthLoggedIn
+	}
+	return cula.AuthLoggedOut
 }
 
 func (r *Runtime) SpawnSession(ctx context.Context, input cula.SessionInput) (cula.Session, error) {
