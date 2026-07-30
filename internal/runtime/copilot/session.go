@@ -157,8 +157,14 @@ func (s *session) spawnAndWait(prompt string) int {
 		s.readStderr(stderr)
 	}()
 
-	waitErr := cmd.Wait()
+	// Drain the output pipes BEFORE reaping the process: cmd.Wait closes the
+	// pipes it created, and os/exec documents that calling Wait before all
+	// reads have completed is incorrect. Waiting the other way round makes the
+	// readers' final Read fail with "file already closed", which surfaces as a
+	// spurious error event on every completed turn (and can drop trailing
+	// output).
 	wg.Wait()
+	waitErr := cmd.Wait()
 
 	s.mu.Lock()
 	s.childCmd = nil
