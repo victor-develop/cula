@@ -368,8 +368,11 @@ func (s *session) emitEvent(raw json.RawMessage, ev cula.Event) {
 }
 
 func (s *session) wait() {
-	err := s.cmd.Wait()
+	// Drain the output pipes before reaping the process — cmd.Wait closes them,
+	// so waiting on it first makes the readers' final Read fail with
+	// "file already closed" (see os/exec StdoutPipe docs).
 	s.wg.Wait()
+	err := s.cmd.Wait()
 	code := iruntime.ExitCode(err)
 	s.mu.Lock()
 	canceled := s.state == cula.StateCanceled
