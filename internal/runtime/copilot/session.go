@@ -208,7 +208,9 @@ func (s *session) readStdout(r io.Reader) {
 		line := append([]byte(nil), scanner.Bytes()...)
 		var raw json.RawMessage
 		if err := json.Unmarshal(line, &raw); err != nil {
-			s.emitError(fmt.Sprintf("decode stdout: %v", err))
+			// A line the CLI printed that is not one of its events — see
+			// iruntime.StrayOutput for why that is not an error.
+			iruntime.Emit(s.events, s.doneCh, iruntime.StrayOutput(cula.RuntimeCopilot, s.sessionID, line))
 			continue
 		}
 		if id := captureSession(raw); id != "" {

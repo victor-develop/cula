@@ -39,6 +39,33 @@ func CommandEnv(input cula.SessionInput, cfg cula.Config) []string {
 	return env
 }
 
+// StrayOutput turns a stdout line that is not part of the runtime's event
+// stream into an event, without calling it a failure.
+//
+// Not everything a CLI prints is an event. claude-code, for one, is run with
+// --output-format stream-json, and its own MCP client writes plain text to the
+// same stdout — "Client.listTools() called but server does not advertise tools
+// capability - returning empty list", once per unauthenticated MCP server, on
+// every turn.
+//
+// Reporting those as EventError puts a failure in front of the user for
+// something that is not one, and does it without the evidence: the message
+// carries the parse error, not the line that failed to parse, so the text is
+// gone by the time anyone reads it. Consumers that render errors end up with a
+// red block per stray line and no way to find out what it was.
+//
+// EventRaw already means "output we did not interpret", which is exactly what
+// this is. The line travels in Text so a consumer that wants it can log it, and
+// one that only renders errors and text stays quiet.
+func StrayOutput(kind cula.RuntimeKind, sessionID string, line []byte) cula.Event {
+	return cula.Event{
+		Type:      cula.EventRaw,
+		Runtime:   kind,
+		SessionID: sessionID,
+		Text:      string(line),
+	}
+}
+
 func Emit(events chan<- cula.Event, done <-chan struct{}, ev cula.Event) (ok bool) {
 	defer func() {
 		if recover() != nil {
